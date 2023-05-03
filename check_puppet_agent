@@ -1,0 +1,58 @@
+#!/bin/bash
+#checking puppet client an gets performance data to check_mk Server
+
+# Puppet Reportfile
+REPORT=/opt/puppetlabs/puppet/cache/state/last_run_summary.yaml
+CHECK_NAME="Puppet Agent"
+TIME_WARN=25
+TIME_CRIT=30
+TIME_MIN=0
+TIME_MAX=50
+TIME=0
+LAST_RUN=$(stat -c %y ${REPORT} | awk '{print $1" "$2}')
+parse_yaml() {
+   local prefix=$2
+   local s='[[:space:]]*' w='[a-zA-Z0-9_]*' fs=$(echo @|tr @ '\034')
+   sed -ne "s|^\($s\):|\1|" \
+        -e "s|^\($s\)\($w\)$s:$s[\"']\(.*\)[\"']$s\$|\1$fs\2$fs\3|p" \
+        -e "s|^\($s\)\($w\)$s:$s\(.*\)$s\$|\1$fs\2$fs\3|p"  $1 |
+   awk -F$fs '{
+      indent = length($1)/2;
+      vname[indent] = $2;
+      for (i in vname) {if (i > indent) {delete vname[i]}}
+      if (length($3) > 0) {
+         vn=""; for (i=0; i<indent; i++) {vn=(vn)(vname[i])("_")}
+        #printf("%s%s%s=\"%s\"\n", "'$prefix'",vn, $2, $3);
+        printf("%s%s%s=%s\n", "'$prefix'",vn, $2, $3);
+      }
+   }'
+}
+
+check_report()(
+
+	return "$STATUS" "$STATUS_TXT"
+
+)
+
+# Check if Reportfile exist
+if [ ! -f ${REPORT} ]; then
+	STATUS_TXT="No report file found!"
+	STATUS=1
+else
+	# Changes ?
+	CHANGES=$(parse_yaml ${REPORT} | grep changes_total | cut -d "=" -f2)
+	# Success?
+	SUCCESS=$(parse_yaml ${REPORT} | grep events_success | cut -d "=" -f2)
+	# Time
+	TIME=$(parse_yaml ${REPORT} | grep time_catalog_application | cut -d "=" -f2)
+	# ERROR ?
+	FAILURE=$(parse_yaml ${REPORT} | grep events_failure | cut -d "=" -f2)
+
+	# Set status
+	if   [ $CHANGES = "0" ] ; then STATUS=0 ; STATUS_TXT="OK" ; fi
+	if [ $CHANGES != "0" ] && [ $SUCCESS = $CHANGES ] ; then STATUS=0 ; STATUS_TXT="$CHANGES changes on system but all success!" ; fi
+	if [ $FAILURE != "0" ] ; then STATUS=2 ; STATUS_TXT="$FAILURE failure on system" ; fi
+
+fi
+
+echo "$STATUS '$CHECK_NAME' time=$TIME;$TIME_WARN;$TIME_CRIT;$TIME_MIN;$TIME_MAX Last run ${LAST_RUN}, $STATUS_TXT"

@@ -1,0 +1,74 @@
+#!/bin/env python3
+
+"""
+Python Skript um den Status des ClamAV Virensignatur anzeigen zu lassen.
+Damit dieses Skript funktioniert muss Python in Version 3 und das Programm clamscan 
+verfügbar sein
+
+Christoph Harmening
+
+"""
+
+# Laden der Module
+# from datetime import datetime # Laden der Klasse "datetime" aus dem Modul "datetime"
+# import datetime -> Import aller Klassen
+from datetime import datetime as dt
+import subprocess
+
+
+heute = dt.today()
+clamavVersion = ''
+clamavMonth   = ''
+clamavDay     = ''
+clamavYear    = ''
+listMonth     = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+checkName     = 'Virendefinition'
+state         = ''
+stateTxt	  = ''
+age			  = ''
+
+# Ausgabe der ClamAV Db Version
+list = subprocess.run(["clamscan", "-V"],
+	stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+	)
+clamavVersion = str(list.stdout)				# Anzeige der ClamAV Db Version
+clamavVersion = str.split(clamavVersion)			# Reduzieren auf das Datum
+clamavDay = clamavVersion[3]					# Zeige den Tag
+clamavMonth = clamavVersion[2]					# Zeige den Monat
+clamavYear = clamavVersion[5]					# Zeige das Jahr\n
+clamavYear = clamavYear[:-3]					# entferne \n
+
+# Wandle die den Monatsnamen in eine Zahl
+i = 1
+for month in listMonth:
+	if month == clamavMonth:
+		clamavMonth = "0"
+		clamavMonth = clamavMonth + str(i)
+		break
+	i=i+1
+
+# Erstelle ein korrektes Datum aus den ClamAV Daten
+clamavVersion = dt(int(clamavYear),int(clamavMonth),int(clamavDay))
+
+# Errechne wie alt das ClamAV Datum im Vergleich zu heute ist
+age = heute - clamavVersion
+age = age.days
+
+# Erstelle einen Status
+if age >= 5:
+	state = 2
+	stateTxt="ERROR"
+elif age >= 3:
+	state = 1
+	stateTxt="WARN"
+else:
+	state = 0
+	stateTxt="OK"
+
+if age >= 2:
+	dayTxt = "days"
+else:
+	dayTxt = "day"
+
+# Ausgabe
+print(str(state) + " '" + str(checkName) + "' - " + str(stateTxt) + " " + str(age) + " " + str(dayTxt) + " old")
